@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+    </head>
+    <body>
+
+        <button onclick="call()">call</button>
+
+        <div>offer : <pre class="offer" /></div>
+        <div>answer : <pre class="answer" /></div>
+
+        <button onclick="read(prompt('상대방에게 받은 SDP를 입력해주세요.'))">read sdp</button>
+
+        <div>
+            <p>방송 <span class="len"/></p>
+            <video class="broadcast" autoplay></video>
+        </div>
+
+
+        <script>
+
+            const peer = [],
+                  data = { ices : [], sdp : null },
+                  broadcast = document.querySelector('.broadcast'),
+                  len = document.querySelector('.len');
+
+            var tick = 0;
+
+
+
+            const init = (tick) => {
+                peer[tick] = new RTCPeerConnection({ iceServers: [ {'url': 'stun:stun.l.google.com:19302'}] });
+                peer[tick].onicecandidate = e => e.candidate && (data.ices.push(e.candidate), document.querySelector(`.${ data.sdp.type }`).textContent = JSON.stringify(data));
+                peer[tick].oniceconnectionstatechange = e => console.log('connection', e.target.iceConnectionState);
+                peer[tick].onaddstream = e => (console.log('On addstream', e.stream), broadcast.srcObject = e.stream, broadcast.play());
+            }
+
+
+
+            const call = e => {
+                
+                typeof peer[tick] !== 'object' && init(tick); // broadcast
+
+                navigator.getUserMedia({ audio:true, video:true }, e => {
+                    broadcast.srcObject = e;
+                    broadcast.muted = true;
+                    broadcast.play();
+
+                    peer[tick].addStream(e);
+                    peer[tick].createOffer().then(offer => peer[tick].setLocalDescription(offer)).then(_ => data.sdp = peer[tick].localDescription);
+
+                }, err => false)
+            }
+
+
+
+            const read = (e) => {
+                e = JSON.parse(e);
+
+                switch(e.sdp.type) {
+                    case 'offer'  : peer[tick].setRemoteDescription(new RTCSessionDescription(e.sdp)).then(() => peer[tick].createAnswer()).then(answer => peer[tick].setLocalDescription(answer)).then(_ => data.sdp = peer[tick].localDescription);
+                        break;
+                    case 'answer' : peer[tick].setRemoteDescription(new RTCSessionDescription(e.sdp));
+                        break;
+                    default : break;
+                }
+
+                setTimeout( _ => {
+                    e.ices.map(ice => peer[tick].addIceCandidate(new RTCIceCandidate(ice)));
+                    e.sdp.type === 'answer' && (tick++, len.textContent = `(시청자 : ${ tick })`, document.querySelector('.offer').textContent = '');
+                }, 1000);
+
+            }
+
+
+
+            init(tick);
+
+        </script>
+    </body>
+</html>
