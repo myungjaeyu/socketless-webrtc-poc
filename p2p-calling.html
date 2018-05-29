@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+    </head>
+    <body>
+
+        <button onclick="call()">call</button>
+
+        <div>offer : <pre class="offer" /></div>
+        <div>answer : <pre class="answer" /></div>
+
+        <button onclick="read(prompt('상대방에게 받은 SDP를 입력해주세요.'))">read sdp</button>
+
+        <div>
+            <p>나</p>
+            <video class="me" muted></video>
+        </div>
+        <div>
+            <p>상대방</p>
+            <video class="other" autoplay></video>
+        </div>
+
+
+        <script>
+
+            const peer = new RTCPeerConnection({ iceServers: [ {'url': 'stun:stun.l.google.com:19302'}] }),
+                  data = { ices : [], sdp : null },
+                  me = document.querySelector('.me'),
+                  other = document.querySelector('.other');
+
+
+
+            navigator.getUserMedia({ audio:true, video:true }, e => (me.srcObject = e, me.play(), peer.addStream(e) ), err => false);
+
+
+
+            peer.onicecandidate = e => e.candidate && (
+                data.ices.push(e.candidate), document.querySelector(`.${ data.sdp.type }`).textContent = JSON.stringify(data)
+            );
+
+
+
+            peer.oniceconnectionstatechange = e => console.log('connection', e.target.iceConnectionState);
+
+
+
+            const call = e => peer.createOffer().then(offer => peer.setLocalDescription(offer))
+                                                .then(_ => data.sdp = peer.localDescription);
+
+
+
+            const read = (e) => {
+                e = JSON.parse(e);
+
+                switch(e.sdp.type) {
+                    case 'offer'  : peer.setRemoteDescription(new RTCSessionDescription(e.sdp))
+                                        .then(() => peer.createAnswer())
+                                        .then(answer => peer.setLocalDescription(answer))
+                                        .then(_ => data.sdp = peer.localDescription);
+                        break;
+                    case 'answer' : peer.setRemoteDescription(new RTCSessionDescription(e.sdp));
+                        break;
+                    default : break;
+                }
+
+                setTimeout(_ => (console.log('ice candidate', e.ices), e.ices.map(ice => peer.addIceCandidate(new RTCIceCandidate(ice))), 1000));
+            }
+
+
+
+            peer.onaddstream = e => (console.log('On addstream', e.stream), other.srcObject = e.stream, other.play());
+
+
+        </script>
+    </body>
+</html>
