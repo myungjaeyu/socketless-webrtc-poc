@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+    </head>
+    <body>
+
+        <button onclick="call()">call</button>
+
+        <div>offer : <pre class="offer" /></div>
+        <div>answer : <pre class="answer" /></div>
+
+        <button onclick="read(prompt('상대방에게 받은 SDP를 입력해주세요.'))">read sdp</button>
+        
+        <div>
+            <p>데이터 채널</p>
+            이름 : <input class="name"><br>
+            내용 : <input class="text"><br>
+            <button class="btn" onclick="send()" disabled>전송</button>
+        </div>
+
+        <div class="log"></div>
+
+        <script>
+
+            const peer = new RTCPeerConnection({ iceServers: [ {'url': 'stun:stun.l.google.com:19302'}] }),
+                  data = { ices : [], sdp : null },
+                  channel = peer.createDataChannel('test');
+
+
+
+            peer.onicecandidate = e => e.candidate && (
+                data.ices.push(e.candidate), document.querySelector(`.${ data.sdp.type }`).textContent = JSON.stringify(data)
+            );
+
+
+
+            peer.oniceconnectionstatechange = e => {
+                e.target.iceConnectionState === 'connected' && (document.querySelector('.btn').disabled = false);
+            };
+
+
+
+            const call = e => peer.createOffer().then(offer => peer.setLocalDescription(offer))
+                                                .then(_ => data.sdp = peer.localDescription);
+
+
+
+            const read = (e) => {
+                e = JSON.parse(e);
+
+                switch(e.sdp.type) {
+                    case 'offer'  : peer.setRemoteDescription(new RTCSessionDescription(e.sdp))
+                                        .then(() => peer.createAnswer())
+                                        .then(answer => peer.setLocalDescription(answer))
+                                        .then(_ => data.sdp = peer.localDescription);
+                        break;
+                    case 'answer' : peer.setRemoteDescription(new RTCSessionDescription(e.sdp));
+                        break;
+                    default : break;
+                }
+
+                setTimeout(_ => (console.log('ice candidate', e.ices), e.ices.map(ice => peer.addIceCandidate(new RTCIceCandidate(ice)))) , 1000);
+            }
+
+
+
+            const log = (type, msg) => document.querySelector('.log').appendChild( (elem => {
+                console.log(type, msg);
+                elem.textContent = `${ type } : ${ JSON.stringify(msg) }`;
+                return elem;
+            })(document.createElement('pre')));
+
+
+
+            const send = _ => {
+
+                let text = document.querySelector('.text'),
+                    msg = { 
+                        name : document.querySelector('.name').value,
+                        text : text.value
+                    };
+
+                log('보냄', msg);
+
+                channel.send(JSON.stringify(msg));
+                text.value = '';
+            }
+
+
+
+            peer.ondatachannel = e => {
+                console.log('channel', e.channel);
+                e.channel.onmessage = e => log('받음', JSON.parse(e.data));
+            };
+
+
+        </script>
+    </body>
+</html>
